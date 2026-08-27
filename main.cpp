@@ -48,17 +48,20 @@ void draw_rectangle(std::vector<uint32_t>& buffer, size_t bufferWidth, size_t bu
         {
             size_t currentPixelX = startPixelX + rectPixelX;
             size_t currentPixelY = startPixelY + rectPixelY;
-            assert(currentPixelX < bufferWidth && currentPixelY < bufferHeight);
-            buffer[currentPixelY * bufferHeight + currentPixelX] = rectColor;
+
+            if (currentPixelX >= bufferWidth || currentPixelY >= bufferHeight) 
+                continue;
+
+            buffer[currentPixelY * bufferWidth + currentPixelX] = rectColor;
         }
     }
 }
 
 int main()
 {
-    size_t bufferWidth = 512;
+    size_t bufferWidth = 1024;
     size_t bufferHeight = 512;
-    std::vector<uint32_t> frameBuffer(bufferWidth * bufferHeight, 255);
+    std::vector<uint32_t> frameBuffer(bufferWidth * bufferHeight, pack_color(255, 255, 255));
 
     constexpr size_t mapWidth = 16;
     constexpr size_t mapHeight = 16;
@@ -85,20 +88,10 @@ int main()
     float playerViewAngle = 1.523f; // in radians
     float fov = M_PI / 3.0f;
 
-    for (size_t pixelY = 0; pixelY < bufferHeight; pixelY++)
-    {
-        for (size_t pixelX = 0; pixelX < bufferWidth; pixelX++)
-        {
-            uint8_t r = ((static_cast<float>(pixelY) / bufferHeight) * 255);
-            uint8_t g = ((static_cast<float>(pixelX) / bufferWidth) * 255);
-            uint8_t b = 0;
-            frameBuffer[pixelX + pixelY * bufferWidth] = pack_color(r, g, b);
-        }
-    }
-
-    size_t gridWidth = bufferWidth / mapWidth;
+    size_t gridWidth = (bufferWidth / mapWidth) * 0.5f;
     size_t gridHeight = bufferHeight / mapHeight;
 
+    // draw map
     for(size_t gridY = 0; gridY < mapHeight; gridY++)
     {
         for (size_t gridX = 0; gridX < mapWidth; gridX++)
@@ -112,13 +105,10 @@ int main()
         }
     }
 
-    draw_rectangle(frameBuffer, bufferWidth, bufferHeight, playerPosX * gridWidth, playerPosY * gridHeight, 5, 5, pack_color(255, 255, 255));
-
-    
     float startFovAngle = playerViewAngle - fov / 2.0f;
-    for(size_t fovAngleStep = 0; fovAngleStep < bufferWidth; fovAngleStep++)
+    for(size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle 
     {
-        float currentFovAngle = startFovAngle + fov*(static_cast<float>(fovAngleStep)/bufferWidth); // divide fov angle by how many pixels horizontally
+        float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
 
         // rayMarchStepSize is also the distance to the player; values are in map grid coords
         for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.05f)
@@ -126,17 +116,24 @@ int main()
             float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
             float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
 
-            if (map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
-                break;
-
             size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
             size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
 
-            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferHeight] = pack_color(255, 255, 255);
+            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
+
+            // if hits a wall, draw the second half of the screen
+            if (map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
+            {
+                // if i am 1 grid away(16 pixels), cover the whole screen
+                // if i am 2 grid away(32 pixels), cover half the screen
+                // if i am 3 grid away(48 pixels), cover 1/3 of the screen
+                // ...
+                float columnHeight = bufferHeight / rayMarchStepSize;  
+                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight/2 - columnHeight/2, 1, columnHeight, pack_color(0, 255, 255));
+                break;
+            }
         }
     }
-
-    
 
     drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
 
