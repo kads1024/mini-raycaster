@@ -34,24 +34,78 @@ void drop_ppm_image(const char* fileName, const std::vector<uint32_t>& buffer, s
     outFile.close();
 }
 
+void draw_rectangle(std::vector<uint32_t>& buffer, size_t bufferWidth, size_t bufferHeight, 
+    size_t startPixelX, size_t startPixelY, size_t rectWidth, size_t rectHeight,
+    uint32_t rectColor)
+{
+    assert(buffer.size() == bufferWidth * bufferHeight);
+
+    for (size_t rectPixelY = 0; rectPixelY < rectHeight; rectPixelY++)
+    {
+        for (size_t rectPixelX = 0; rectPixelX < rectWidth; rectPixelX++)
+        {
+            size_t currentPixelX = startPixelX + rectPixelX;
+            size_t currentPixelY = startPixelY + rectPixelY;
+            assert(currentPixelX < bufferWidth && currentPixelY < bufferHeight);
+            buffer[currentPixelY * bufferHeight + currentPixelX] = rectColor;
+        }
+    }
+}
+
 int main()
 {
-    size_t w = 512;
-    size_t h = 512;
-    std::vector<uint32_t> frameBuffer(w * h, 255);
+    size_t bufferWidth = 512;
+    size_t bufferHeight = 512;
+    std::vector<uint32_t> frameBuffer(bufferWidth * bufferHeight, 255);
 
-    for(size_t pixelY = 0; pixelY < h; pixelY++)
+    constexpr size_t mapWidth = 16;
+    constexpr size_t mapHeight = 16;
+    const char map[mapWidth * mapHeight + 1] = // +1 is the null termination
+        "0000222222220000"
+        "1              0"
+        "1      11111   0"
+        "1     0        0"
+        "0     0  1110000"
+        "0     3        0"
+        "0   10000      0"
+        "0   0   11100  0"
+        "0   0   0      0"
+        "0   0   1  00000"
+        "0       1      0"
+        "2       1      0"
+        "0       0      0"
+        "0 0000000      0"
+        "0              0"
+        "0002222222200000";
+
+    for (size_t pixelY = 0; pixelY < bufferHeight; pixelY++)
     {
-        for (size_t pixelX = 0; pixelX < w; pixelX++)
+        for (size_t pixelX = 0; pixelX < bufferWidth; pixelX++)
         {
-            uint8_t r = ((float(pixelY) / h) * 255);
-            uint8_t g = ((float(pixelX) / w) * 255);
+            uint8_t r = ((static_cast<float>(pixelY) / bufferHeight) * 255);
+            uint8_t g = ((static_cast<float>(pixelX) / bufferWidth) * 255);
             uint8_t b = 0;
-            frameBuffer[pixelX + pixelY * w] = pack_color(r, g, b);
+            frameBuffer[pixelX + pixelY * bufferWidth] = pack_color(r, g, b);
         }
     }
 
-    drop_ppm_image("./out.ppm", frameBuffer, w, h);
+    size_t gridWidth = bufferWidth / mapWidth;
+    size_t gridHeight = bufferHeight / mapHeight;
+
+    for(size_t gridY = 0; gridY < mapHeight; gridY++)
+    {
+        for (size_t gridX = 0; gridX < mapWidth; gridX++)
+        {
+            if(map[gridX + gridY*mapWidth] == ' ') 
+                continue;
+
+            size_t rectStartPixelX = gridX * gridWidth;
+            size_t rectStartPixelY = gridY * gridHeight;
+            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, pack_color(0, 255, 255));
+        }
+    }
+
+    drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
 
     return 0;
 }
