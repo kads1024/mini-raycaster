@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <string>
@@ -80,6 +81,7 @@ int main()
 
     float playerPosX = 3.456f;
     float playerPosY = 2.345f;
+    float playerViewAngle = 1.523f; // in radians
 
     for (size_t pixelY = 0; pixelY < bufferHeight; pixelY++)
     {
@@ -109,6 +111,21 @@ int main()
     }
 
     draw_rectangle(frameBuffer, bufferWidth, bufferHeight, playerPosX * gridWidth, playerPosY * gridHeight, 5, 5, pack_color(255, 255, 255));
+
+    // rayMarchStepSize is also the distance to the player; values are in map grid coords
+    for(float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.05f) 
+    {
+        float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(playerViewAngle);
+        float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(playerViewAngle);
+
+        if(map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
+            break;
+
+        size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
+        size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+
+        frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferHeight] = pack_color(255, 255, 255);
+    }
 
     drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
 
