@@ -78,6 +78,9 @@ int main()
         "0              0"
         "0002222222200000";
 
+    float playerPosX = 3.456f;
+    float playerPosY = 2.345f;
+
     for (size_t pixelY = 0; pixelY < bufferHeight; pixelY++)
     {
         for (size_t pixelX = 0; pixelX < bufferWidth; pixelX++)
@@ -104,6 +107,8 @@ int main()
             draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, pack_color(0, 255, 255));
         }
     }
+
+    draw_rectangle(frameBuffer, bufferWidth, bufferHeight, playerPosX * gridWidth, playerPosY * gridHeight, 5, 5, pack_color(255, 255, 255));
 
     drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
 
