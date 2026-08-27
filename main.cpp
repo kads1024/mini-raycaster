@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -82,6 +83,7 @@ int main()
     float playerPosX = 3.456f;
     float playerPosY = 2.345f;
     float playerViewAngle = 1.523f; // in radians
+    float fov = M_PI / 3.0f;
 
     for (size_t pixelY = 0; pixelY < bufferHeight; pixelY++)
     {
@@ -112,20 +114,29 @@ int main()
 
     draw_rectangle(frameBuffer, bufferWidth, bufferHeight, playerPosX * gridWidth, playerPosY * gridHeight, 5, 5, pack_color(255, 255, 255));
 
-    // rayMarchStepSize is also the distance to the player; values are in map grid coords
-    for(float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.05f) 
+    
+    float startFovAngle = playerViewAngle - fov / 2.0f;
+    for(size_t fovAngleStep = 0; fovAngleStep < bufferWidth; fovAngleStep++)
     {
-        float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(playerViewAngle);
-        float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(playerViewAngle);
+        float currentFovAngle = startFovAngle + fov*(static_cast<float>(fovAngleStep)/bufferWidth); // divide fov angle by how many pixels horizontally
 
-        if(map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
-            break;
+        // rayMarchStepSize is also the distance to the player; values are in map grid coords
+        for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.05f)
+        {
+            float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
+            float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
 
-        size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
-        size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+            if (map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
+                break;
 
-        frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferHeight] = pack_color(255, 255, 255);
+            size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
+            size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+
+            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferHeight] = pack_color(255, 255, 255);
+        }
     }
+
+    
 
     drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
 
