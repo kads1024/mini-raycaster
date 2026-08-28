@@ -107,6 +107,26 @@ bool load_texture(const std::string &fileName, std::vector<uint32_t> &outTexture
     stbi_image_free(pixelMap);
     return true;
 }
+
+std::vector<uint32_t> textureColumn(const std::vector<uint32_t>& inTexture, size_t textureSize, size_t textureCount, size_t textureID, size_t xCoord, size_t columnHeight)
+{
+    size_t textureMapWidth = textureSize * textureCount;
+    size_t textureMapHeight = textureSize;
+
+    assert((inTexture.size() == textureMapWidth * textureMapHeight) && xCoord < textureSize && textureID < textureCount);
+
+    std::vector<uint32_t> column(columnHeight);
+
+    size_t pixelX = textureID * textureSize + xCoord;
+    for (size_t y = 0; y < columnHeight; y++)
+    {
+        size_t pixelY = textureSize * (static_cast<float>(y) / columnHeight);
+        column[y] = inTexture[pixelX + pixelY * textureMapWidth];
+    }
+
+    return column;
+}
+
 int main()
 {
     size_t bufferWidth = 1024;
@@ -196,8 +216,8 @@ int main()
             float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
             float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
 
-            size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
-            size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+            int rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
+            int rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
 
             frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
 
@@ -213,7 +233,34 @@ int main()
                 // if i am 3 grid away(48 pixels), cover 1/3 of the screen
                 // ...
                 float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle));
-                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, wallTextures[textureId * wallTextureSize]);
+                // draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, wallTextures[textureId * wallTextureSize]);
+                float hitX = rayMarchGridStepX - floor(rayMarchGridStepX + 0.5f);
+                float hitY = rayMarchGridStepY - floor(rayMarchGridStepY + 0.5f);
+
+                int xCoord = (abs(hitX) > abs(hitY) ? hitX : hitY) * wallTextureSize;
+
+                if(xCoord < 0)
+                    xCoord += wallTextureSize;
+
+                assert(xCoord >= 0 && xCoord < wallTextureSize);
+
+                std::vector<uint32_t> column = textureColumn(wallTextures, wallTextureSize, wallTextureCount, textureId, xCoord, columnHeight);
+
+                // draw second half of the screen
+                rayMarchStepPixelX = (bufferWidth / 2) + fovAngleStep;
+
+                for(size_t columnY = 0; columnY < columnHeight; columnY++)
+                {
+                    size_t columnStartPixelY = bufferHeight / 2 - columnHeight / 2;
+
+                    rayMarchStepPixelY = columnY + columnStartPixelY;
+
+                    if(rayMarchStepPixelY < 0 || rayMarchStepPixelY >= bufferHeight) 
+                        continue;
+
+                    frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = column[columnY];
+                }
+
                 break;
             } // if hit wall
         } // end raymarch
