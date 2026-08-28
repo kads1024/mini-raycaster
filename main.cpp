@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "framebuffer.h"
+#include "map.h"
 #include "stb_image.h"
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
@@ -115,25 +116,7 @@ int main()
     buffer.height = 512;
     buffer.clear(pack_color(255, 255, 255));
 
-    constexpr size_t mapWidth = 16;
-    constexpr size_t mapHeight = 16;
-    const char map[mapWidth * mapHeight + 1] = // +1 is the null termination
-        "0000222222220000"
-        "1              0"
-        "1      11111   0"
-        "1     0        0"
-        "0     0  1110000"
-        "0     3        0"
-        "0   10000      0"
-        "0   3   11100  0"
-        "5   4   0      0"
-        "5   4   1  00000"
-        "0       1      0"
-        "2       1      0"
-        "0       0      0"
-        "0 0000000      0"
-        "0              0"
-        "0002222222200000";
+    map gameMap;
 
     float playerPosX = 3.456f;
     float playerPosY = 2.345f;
@@ -156,8 +139,8 @@ int main()
         return -1;
     }
 
-    size_t gridWidth = (buffer.width / mapWidth) * 0.5f;
-    size_t gridHeight = buffer.height / mapHeight;
+    size_t gridWidth = (buffer.width / gameMap.width) * 0.5f;
+    size_t gridHeight = buffer.height / gameMap.height;
 
     // animation loop
     // for(size_t frame = 0; frame < 360; frame++)
@@ -172,16 +155,16 @@ int main()
     // frameBuffer = std::vector<uint32_t>(bufferWidth * bufferHeight, pack_color(255, 255, 255)); // clear
 
     // draw map
-    for (size_t gridY = 0; gridY < mapHeight; gridY++)
+    for (size_t gridY = 0; gridY < gameMap.height; gridY++)
     {
-        for (size_t gridX = 0; gridX < mapWidth; gridX++)
+        for (size_t gridX = 0; gridX < gameMap.width; gridX++)
         {
-            if (map[gridX + gridY * mapWidth] == ' ')
+            if (gameMap.is_cell_empty(gridX, gridY))
                 continue;
 
             size_t rectStartPixelX = gridX * gridWidth;
             size_t rectStartPixelY = gridY * gridHeight;
-            size_t textureId = map[gridX + gridY * mapWidth] - '0';
+            size_t textureId = gameMap.get(gridX, gridY);
             assert(textureId < wallTextureCount);
             buffer.draw_rectangle(rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, wallTextures[textureId*wallTextureSize]);
         }
@@ -204,10 +187,9 @@ int main()
            buffer.data[rayMarchStepPixelX + rayMarchStepPixelY * buffer.width] = pack_color(160, 160, 160);
 
             // if hits a wall, draw the second half of the screen
-            size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
-            if (map[currentMapIndex] != ' ')
+            if (!gameMap.is_cell_empty(rayMarchGridStepX, rayMarchGridStepY))
             {
-                size_t textureId = map[currentMapIndex] - '0';
+                size_t textureId = gameMap.get(rayMarchGridStepX, rayMarchGridStepY);
                 assert(textureId < wallTextureCount);
 
                 // if i am 1 grid away(16 pixels), cover the whole screen
