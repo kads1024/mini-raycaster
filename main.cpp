@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "framebuffer.h"
 #include "stb_image.h"
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
@@ -40,26 +41,6 @@ void drop_ppm_image(const char *fileName, const std::vector<uint32_t> &buffer, s
     outFile.close();
 }
 
-void draw_rectangle(std::vector<uint32_t> &buffer, size_t bufferWidth, size_t bufferHeight,
-                    size_t startPixelX, size_t startPixelY, size_t rectWidth, size_t rectHeight,
-                    uint32_t rectColor)
-{
-    assert(buffer.size() == bufferWidth * bufferHeight);
-
-    for (size_t rectPixelY = 0; rectPixelY < rectHeight; rectPixelY++)
-    {
-        for (size_t rectPixelX = 0; rectPixelX < rectWidth; rectPixelX++)
-        {
-            size_t currentPixelX = startPixelX + rectPixelX;
-            size_t currentPixelY = startPixelY + rectPixelY;
-
-            if (currentPixelX >= bufferWidth || currentPixelY >= bufferHeight)
-                continue;
-
-            buffer[currentPixelY * bufferWidth + currentPixelX] = rectColor;
-        }
-    }
-}
 
 bool load_texture(const std::string &fileName, std::vector<uint32_t> &outTexture, size_t &outTextureSize, size_t &outTextureCount)
 {
@@ -129,9 +110,10 @@ std::vector<uint32_t> textureColumn(const std::vector<uint32_t>& inTexture, size
 
 int main()
 {
-    size_t bufferWidth = 1024;
-    size_t bufferHeight = 512;
-    std::vector<uint32_t> frameBuffer(bufferWidth * bufferHeight, pack_color(255, 255, 255));
+    frameBuffer buffer;
+    buffer.width = 1024;
+    buffer.height = 512;
+    buffer.clear(pack_color(255, 255, 255));
 
     constexpr size_t mapWidth = 16;
     constexpr size_t mapHeight = 16;
@@ -174,8 +156,8 @@ int main()
         return -1;
     }
 
-    size_t gridWidth = (bufferWidth / mapWidth) * 0.5f;
-    size_t gridHeight = bufferHeight / mapHeight;
+    size_t gridWidth = (buffer.width / mapWidth) * 0.5f;
+    size_t gridHeight = buffer.height / mapHeight;
 
     // animation loop
     // for(size_t frame = 0; frame < 360; frame++)
@@ -201,14 +183,14 @@ int main()
             size_t rectStartPixelY = gridY * gridHeight;
             size_t textureId = map[gridX + gridY * mapWidth] - '0';
             assert(textureId < wallTextureCount);
-            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, wallTextures[textureId*wallTextureSize]);
+            buffer.draw_rectangle(rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, wallTextures[textureId*wallTextureSize]);
         }
     }
 
     float startFovAngle = playerViewAngle - fov / 2.0f;
-    for (size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle
+    for (size_t fovAngleStep = 0; fovAngleStep < buffer.width / 2; fovAngleStep++) // loop through each angle
     {
-        float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
+        float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (buffer.width / 2)); // divide fov angle by how many pixels horizontally
 
         // rayMarchStepSize is also the distance to the player; values are in map grid coords
         for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.01f)
@@ -219,7 +201,7 @@ int main()
             int rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
             int rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
 
-            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
+           buffer.data[rayMarchStepPixelX + rayMarchStepPixelY * buffer.width] = pack_color(160, 160, 160);
 
             // if hits a wall, draw the second half of the screen
             size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
@@ -232,7 +214,7 @@ int main()
                 // if i am 2 grid away(32 pixels), cover half the screen
                 // if i am 3 grid away(48 pixels), cover 1/3 of the screen
                 // ...
-                float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle));
+                float columnHeight = buffer.height / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle));
                 // draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, wallTextures[textureId * wallTextureSize]);
                 float hitX = rayMarchGridStepX - floor(rayMarchGridStepX + 0.5f);
                 float hitY = rayMarchGridStepY - floor(rayMarchGridStepY + 0.5f);
@@ -247,18 +229,18 @@ int main()
                 std::vector<uint32_t> column = textureColumn(wallTextures, wallTextureSize, wallTextureCount, textureId, xCoord, columnHeight);
 
                 // draw second half of the screen
-                rayMarchStepPixelX = (bufferWidth / 2) + fovAngleStep;
+                rayMarchStepPixelX = (buffer.width / 2) + fovAngleStep;
 
                 for(size_t columnY = 0; columnY < columnHeight; columnY++)
                 {
-                    size_t columnStartPixelY = bufferHeight / 2 - columnHeight / 2;
+                    size_t columnStartPixelY = buffer.height / 2 - columnHeight / 2;
 
                     rayMarchStepPixelY = columnY + columnStartPixelY;
 
-                    if(rayMarchStepPixelY < 0 || rayMarchStepPixelY >= bufferHeight) 
+                    if(rayMarchStepPixelY < 0 || rayMarchStepPixelY >= buffer.height) 
                         continue;
 
-                    frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = column[columnY];
+                    buffer.data[rayMarchStepPixelX + rayMarchStepPixelY * buffer.width] = column[columnY];
                 }
 
                 break;
@@ -283,6 +265,6 @@ int main()
     //     }
     // }
 
-    drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
+    drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
     return 0;
 }
