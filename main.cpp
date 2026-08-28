@@ -83,14 +83,15 @@ void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, tex
 
     int verticalOffset = static_cast<int>(buffer.height) / 2 - static_cast<int>(spriteScreenSize) / 2;
 
-    for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
+    // draw per column vertically
+    for (size_t pixelX = 0; pixelX < spriteScreenSize; pixelX++)
     {
-        if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
+        if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
             continue; // don't draw out of bounds
 
-        for (size_t pixelX = 0; pixelX < spriteScreenSize; pixelX++)
+        for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
         {
-            if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
+            if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
                 continue; // don't draw out of bounds
 
             buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, pack_color(0, 0, 0));
