@@ -3,6 +3,9 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -88,54 +91,84 @@ int main()
     float playerViewAngle = 1.523f; // in radians
     float fov = M_PI / 3.0f;
 
+    size_t numColors = 10;
+    std::vector<uint32_t> colors(numColors);
+    for(size_t i = 0; i < numColors; i++)
+    {
+        colors[i] = pack_color(rand() % 255, rand() % 255, rand() % 255);
+    }
+
     size_t gridWidth = (bufferWidth / mapWidth) * 0.5f;
     size_t gridHeight = bufferHeight / mapHeight;
 
-    // draw map
-    for(size_t gridY = 0; gridY < mapHeight; gridY++)
+    // animation loop
+    // for(size_t frame = 0; frame < 360; frame++)
+    // {
+    // }
+
+    // animation loop
+    for (size_t frame = 0; frame < 360; frame++)
     {
-        for (size_t gridX = 0; gridX < mapWidth; gridX++)
+        std::stringstream ss;
+        ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
+        playerViewAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
+        frameBuffer = std::vector<uint32_t>(bufferWidth * bufferHeight, pack_color(255, 255, 255)); // clear
+
+        // draw map
+        for (size_t gridY = 0; gridY < mapHeight; gridY++)
         {
-            if(map[gridX + gridY*mapWidth] == ' ') 
-                continue;
-
-            size_t rectStartPixelX = gridX * gridWidth;
-            size_t rectStartPixelY = gridY * gridHeight;
-            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, pack_color(0, 255, 255));
-        }
-    }
-
-    float startFovAngle = playerViewAngle - fov / 2.0f;
-    for(size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle 
-    {
-        float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
-
-        // rayMarchStepSize is also the distance to the player; values are in map grid coords
-        for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.05f)
-        {
-            float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
-            float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
-
-            size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
-            size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
-
-            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
-
-            // if hits a wall, draw the second half of the screen
-            if (map[static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth] != ' ')
+            for (size_t gridX = 0; gridX < mapWidth; gridX++)
             {
-                // if i am 1 grid away(16 pixels), cover the whole screen
-                // if i am 2 grid away(32 pixels), cover half the screen
-                // if i am 3 grid away(48 pixels), cover 1/3 of the screen
-                // ...
-                float columnHeight = bufferHeight / rayMarchStepSize;  
-                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight/2 - columnHeight/2, 1, columnHeight, pack_color(0, 255, 255));
-                break;
+                if (map[gridX + gridY * mapWidth] == ' ')
+                    continue;
+
+                size_t rectStartPixelX = gridX * gridWidth;
+                size_t rectStartPixelY = gridY * gridHeight;
+                size_t idxColor = map[gridX + gridY * mapWidth] - '0';
+                assert(idxColor < numColors);
+                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, colors[idxColor]);
             }
         }
-    }
 
-    drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
+        float startFovAngle = playerViewAngle - fov / 2.0f;
+        for (size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle
+        {
+            float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
 
+            // rayMarchStepSize is also the distance to the player; values are in map grid coords
+            for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.01f)
+            {
+                float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
+                float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
+
+                size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
+                size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+
+                frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
+
+                // if hits a wall, draw the second half of the screen
+                size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
+                if (map[currentMapIndex] != ' ')
+                {
+                    size_t idxColor = map[currentMapIndex] - '0';
+                    assert(idxColor < numColors);
+
+                    // if i am 1 grid away(16 pixels), cover the whole screen
+                    // if i am 2 grid away(32 pixels), cover half the screen
+                    // if i am 3 grid away(48 pixels), cover 1/3 of the screen
+                    // ...
+                    float columnHeight = bufferHeight / rayMarchStepSize;
+                    draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, colors[idxColor]);
+                    break;
+                } // if hit wall
+            } // end raymarch
+        } // end angle step
+
+        drop_ppm_image(ss.str().c_str(), frameBuffer, bufferWidth, bufferHeight);
+        
+        std::cout << "\033[H\033[2J" << std::flush; // clear console
+        std::cout << static_cast<int>((frame / 360.0f) * 100) << "%";
+    }// end animation loop
+    
     return 0;
 }
