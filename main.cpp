@@ -157,7 +157,7 @@ int main()
                     // if i am 2 grid away(32 pixels), cover half the screen
                     // if i am 3 grid away(48 pixels), cover 1/3 of the screen
                     // ...
-                    float columnHeight = bufferHeight / rayMarchStepSize;
+                    float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle   ));
                     draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, colors[idxColor]);
                     break;
                 } // if hit wall
@@ -165,8 +165,8 @@ int main()
         } // end angle step
 
         drop_ppm_image(ss.str().c_str(), frameBuffer, bufferWidth, bufferHeight);
-        
-        std::cout << "\033[H\033[2J" << std::flush; // clear console
+
+        std::cout << "\033[H\033[2J"; // clear console
         std::cout << static_cast<int>((frame / 360.0f) * 100) << "%";
     }// end animation loop
     
