@@ -1,20 +1,21 @@
 #define _USE_MATH_DEFINES
+#define STB_IMAGE_IMPLEMENTATION
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
+
+#include "stb_image.h"
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
 {
     return r + (g << 8) + (b << 16) + (a << 24);
 }
 
-void unpack_color(uint32_t inColor, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a)
+void unpack_color(uint32_t inColor, uint8_t &r, uint8_t &g, uint8_t &b, uint8_t &a)
 {
     r = inColor & 255;
     g = (inColor >> 8) & 255;
@@ -22,7 +23,7 @@ void unpack_color(uint32_t inColor, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t&
     a = (inColor >> 24) & 255;
 }
 
-void drop_ppm_image(const char* fileName, const std::vector<uint32_t>& buffer, size_t w, size_t h)
+void drop_ppm_image(const char *fileName, const std::vector<uint32_t> &buffer, size_t w, size_t h)
 {
     assert(buffer.size() == w * h);
     std::ofstream outFile(fileName, std::ios::binary);
@@ -39,9 +40,9 @@ void drop_ppm_image(const char* fileName, const std::vector<uint32_t>& buffer, s
     outFile.close();
 }
 
-void draw_rectangle(std::vector<uint32_t>& buffer, size_t bufferWidth, size_t bufferHeight, 
-    size_t startPixelX, size_t startPixelY, size_t rectWidth, size_t rectHeight,
-    uint32_t rectColor)
+void draw_rectangle(std::vector<uint32_t> &buffer, size_t bufferWidth, size_t bufferHeight,
+                    size_t startPixelX, size_t startPixelY, size_t rectWidth, size_t rectHeight,
+                    uint32_t rectColor)
 {
     assert(buffer.size() == bufferWidth * bufferHeight);
 
@@ -52,7 +53,7 @@ void draw_rectangle(std::vector<uint32_t>& buffer, size_t bufferWidth, size_t bu
             size_t currentPixelX = startPixelX + rectPixelX;
             size_t currentPixelY = startPixelY + rectPixelY;
 
-            if (currentPixelX >= bufferWidth || currentPixelY >= bufferHeight) 
+            if (currentPixelX >= bufferWidth || currentPixelY >= bufferHeight)
                 continue;
 
             buffer[currentPixelY * bufferWidth + currentPixelX] = rectColor;
@@ -60,6 +61,52 @@ void draw_rectangle(std::vector<uint32_t>& buffer, size_t bufferWidth, size_t bu
     }
 }
 
+bool load_texture(const std::string &fileName, std::vector<uint32_t> &outTexture, size_t &outTextureSize, size_t &outTextureCount)
+{
+    int numChannels = -1;
+    int textureWidth;
+    int textureHeight;
+
+    unsigned char *pixelMap = stbi_load(fileName.c_str(), &textureWidth, &textureHeight, &numChannels, 0);
+    if (!pixelMap)
+    {
+        std::cerr << "Error: can not load the textures" << std::endl;
+        return false;
+    }
+
+    if (4 != numChannels)
+    {
+        std::cerr << "Error: the texture must be a 32 bit image" << std::endl;
+        stbi_image_free(pixelMap);
+        return false;
+    }
+
+    outTextureCount = textureWidth / textureHeight; // must be square
+    outTextureSize = textureWidth / outTextureCount;
+
+    if (textureWidth != textureHeight * int(outTextureCount)) // width must be equal to count*height
+    {
+        std::cerr << "Error: the texture file must contain N square textures packed horizontally" << std::endl;
+        stbi_image_free(pixelMap);
+        return false;
+    }
+
+    outTexture = std::vector<uint32_t>(textureWidth * textureHeight);
+    for (size_t texturePixelY = 0; texturePixelY < textureHeight; texturePixelY++)
+    {
+        for (size_t texturePixelX = 0; texturePixelX < textureWidth; texturePixelX++)
+        {
+            // 4 bytes per color
+            uint8_t r = pixelMap[(texturePixelX + texturePixelY * textureWidth) * 4 + 0];
+            uint8_t g = pixelMap[(texturePixelX + texturePixelY * textureWidth) * 4 + 1];
+            uint8_t b = pixelMap[(texturePixelX + texturePixelY * textureWidth) * 4 + 2];
+            uint8_t a = pixelMap[(texturePixelX + texturePixelY * textureWidth) * 4 + 3];
+            outTexture[texturePixelX + texturePixelY * textureWidth] = pack_color(r, g, b, a);
+        }
+    }
+    stbi_image_free(pixelMap);
+    return true;
+}
 int main()
 {
     size_t bufferWidth = 1024;
@@ -93,9 +140,18 @@ int main()
 
     size_t numColors = 10;
     std::vector<uint32_t> colors(numColors);
-    for(size_t i = 0; i < numColors; i++)
+    for (size_t i = 0; i < numColors; i++)
     {
         colors[i] = pack_color(rand() % 255, rand() % 255, rand() % 255);
+    }
+
+    std::vector<uint32_t> wallTextures;
+    size_t wallTextureSize;
+    size_t wallTextureCount;
+    if (!load_texture("./walltext.png", wallTextures, wallTextureSize, wallTextureCount))
+    {
+        std::cerr << "FAILED TO LOAD walltext.png\n";
+        return -1;
     }
 
     size_t gridWidth = (bufferWidth / mapWidth) * 0.5f;
@@ -107,68 +163,79 @@ int main()
     // }
 
     // animation loop
-    for (size_t frame = 0; frame < 360; frame++)
+
+    // std::stringstream ss;
+    // ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
+    // playerViewAngle += 2.0f * M_PI / 360.0f;                                                    // iterate by 1deg in rad
+    // frameBuffer = std::vector<uint32_t>(bufferWidth * bufferHeight, pack_color(255, 255, 255)); // clear
+
+    // draw map
+    for (size_t gridY = 0; gridY < mapHeight; gridY++)
     {
-        std::stringstream ss;
-        ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
-        playerViewAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
-        frameBuffer = std::vector<uint32_t>(bufferWidth * bufferHeight, pack_color(255, 255, 255)); // clear
-
-        // draw map
-        for (size_t gridY = 0; gridY < mapHeight; gridY++)
+        for (size_t gridX = 0; gridX < mapWidth; gridX++)
         {
-            for (size_t gridX = 0; gridX < mapWidth; gridX++)
-            {
-                if (map[gridX + gridY * mapWidth] == ' ')
-                    continue;
+            if (map[gridX + gridY * mapWidth] == ' ')
+                continue;
 
-                size_t rectStartPixelX = gridX * gridWidth;
-                size_t rectStartPixelY = gridY * gridHeight;
-                size_t idxColor = map[gridX + gridY * mapWidth] - '0';
-                assert(idxColor < numColors);
-                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, colors[idxColor]);
-            }
+            size_t rectStartPixelX = gridX * gridWidth;
+            size_t rectStartPixelY = gridY * gridHeight;
+            size_t idxColor = map[gridX + gridY * mapWidth] - '0';
+            assert(idxColor < numColors);
+            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, colors[idxColor]);
         }
+    }
 
-        float startFovAngle = playerViewAngle - fov / 2.0f;
-        for (size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle
+    float startFovAngle = playerViewAngle - fov / 2.0f;
+    for (size_t fovAngleStep = 0; fovAngleStep < bufferWidth / 2; fovAngleStep++) // loop through each angle
+    {
+        float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
+
+        // rayMarchStepSize is also the distance to the player; values are in map grid coords
+        for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.01f)
         {
-            float currentFovAngle = startFovAngle + fov * (static_cast<float>(fovAngleStep) / (bufferWidth / 2)); // divide fov angle by how many pixels horizontally
+            float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
+            float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
 
-            // rayMarchStepSize is also the distance to the player; values are in map grid coords
-            for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.01f)
+            size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
+            size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+
+            frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
+
+            // if hits a wall, draw the second half of the screen
+            size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
+            if (map[currentMapIndex] != ' ')
             {
-                float rayMarchGridStepX = playerPosX + rayMarchStepSize * cos(currentFovAngle);
-                float rayMarchGridStepY = playerPosY + rayMarchStepSize * sin(currentFovAngle);
+                size_t idxColor = map[currentMapIndex] - '0';
+                assert(idxColor < numColors);
 
-                size_t rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
-                size_t rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
+                // if i am 1 grid away(16 pixels), cover the whole screen
+                // if i am 2 grid away(32 pixels), cover half the screen
+                // if i am 3 grid away(48 pixels), cover 1/3 of the screen
+                // ...
+                float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle));
+                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, colors[idxColor]);
+                break;
+            } // if hit wall
+        } // end raymarch
+    } // end angle step
 
-                frameBuffer[rayMarchStepPixelX + rayMarchStepPixelY * bufferWidth] = pack_color(160, 160, 160);
-
-                // if hits a wall, draw the second half of the screen
-                size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
-                if (map[currentMapIndex] != ' ')
-                {
-                    size_t idxColor = map[currentMapIndex] - '0';
-                    assert(idxColor < numColors);
-
-                    // if i am 1 grid away(16 pixels), cover the whole screen
-                    // if i am 2 grid away(32 pixels), cover half the screen
-                    // if i am 3 grid away(48 pixels), cover 1/3 of the screen
-                    // ...
-                    float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle   ));
-                    draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, colors[idxColor]);
-                    break;
-                } // if hit wall
-            } // end raymarch
-        } // end angle step
-
-        drop_ppm_image(ss.str().c_str(), frameBuffer, bufferWidth, bufferHeight);
-
-        std::cout << "\033[H\033[2J"; // clear console
-        std::cout << static_cast<int>((frame / 360.0f) * 100) << "%";
-    }// end animation loop
     
+
+    // std::cout << "\033[H\033[2J"; // clear console
+    // std::cout << static_cast<int>((frame / 360.0f) * 100) << "%";
+
+    size_t textureId = 4;
+    for(size_t texturePixelY = 0; texturePixelY < wallTextureSize; texturePixelY++)
+    {
+        for (size_t texturePixelX = 0; texturePixelX < wallTextureSize; texturePixelX++)
+        {
+            size_t startPixelX = wallTextureSize * textureId;
+
+            frameBuffer[texturePixelX + texturePixelY * bufferWidth] = 
+                wallTextures[(startPixelX + texturePixelX) + texturePixelY * (wallTextureSize * wallTextureCount)];
+        }
+    }
+
+    drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
     return 0;
 }
