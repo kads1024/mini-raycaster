@@ -123,9 +123,9 @@ int main()
         "0     0  1110000"
         "0     3        0"
         "0   10000      0"
-        "0   0   11100  0"
-        "0   0   0      0"
-        "0   0   1  00000"
+        "0   3   11100  0"
+        "5   4   0      0"
+        "5   4   1  00000"
         "0       1      0"
         "2       1      0"
         "0       0      0"
@@ -138,12 +138,12 @@ int main()
     float playerViewAngle = 1.523f; // in radians
     float fov = M_PI / 3.0f;
 
-    size_t numColors = 10;
-    std::vector<uint32_t> colors(numColors);
-    for (size_t i = 0; i < numColors; i++)
-    {
-        colors[i] = pack_color(rand() % 255, rand() % 255, rand() % 255);
-    }
+    // size_t numColors = 10;
+    // std::vector<uint32_t> colors(numColors);
+    // for (size_t i = 0; i < numColors; i++)
+    // {
+    //     colors[i] = pack_color(rand() % 255, rand() % 255, rand() % 255);
+    // }
 
     std::vector<uint32_t> wallTextures;
     size_t wallTextureSize;
@@ -179,9 +179,9 @@ int main()
 
             size_t rectStartPixelX = gridX * gridWidth;
             size_t rectStartPixelY = gridY * gridHeight;
-            size_t idxColor = map[gridX + gridY * mapWidth] - '0';
-            assert(idxColor < numColors);
-            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, colors[idxColor]);
+            size_t textureId = map[gridX + gridY * mapWidth] - '0';
+            assert(textureId < wallTextureCount);
+            draw_rectangle(frameBuffer, bufferWidth, bufferHeight, rectStartPixelX, rectStartPixelY, gridWidth, gridHeight, wallTextures[textureId*wallTextureSize]);
         }
     }
 
@@ -205,15 +205,15 @@ int main()
             size_t currentMapIndex = static_cast<int>(rayMarchGridStepX) + static_cast<int>(rayMarchGridStepY) * mapWidth;
             if (map[currentMapIndex] != ' ')
             {
-                size_t idxColor = map[currentMapIndex] - '0';
-                assert(idxColor < numColors);
+                size_t textureId = map[currentMapIndex] - '0';
+                assert(textureId < wallTextureCount);
 
                 // if i am 1 grid away(16 pixels), cover the whole screen
                 // if i am 2 grid away(32 pixels), cover half the screen
                 // if i am 3 grid away(48 pixels), cover 1/3 of the screen
                 // ...
                 float columnHeight = bufferHeight / (rayMarchStepSize * cos(currentFovAngle - playerViewAngle));
-                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, colors[idxColor]);
+                draw_rectangle(frameBuffer, bufferWidth, bufferHeight, (bufferWidth / 2 + fovAngleStep), bufferHeight / 2 - columnHeight / 2, 1, columnHeight, wallTextures[textureId * wallTextureSize]);
                 break;
             } // if hit wall
         } // end raymarch
@@ -224,17 +224,17 @@ int main()
     // std::cout << "\033[H\033[2J"; // clear console
     // std::cout << static_cast<int>((frame / 360.0f) * 100) << "%";
 
-    size_t textureId = 4;
-    for(size_t texturePixelY = 0; texturePixelY < wallTextureSize; texturePixelY++)
-    {
-        for (size_t texturePixelX = 0; texturePixelX < wallTextureSize; texturePixelX++)
-        {
-            size_t startPixelX = wallTextureSize * textureId;
+    // size_t textureId = 4;
+    // for(size_t texturePixelY = 0; texturePixelY < wallTextureSize; texturePixelY++)
+    // {
+    //     for (size_t texturePixelX = 0; texturePixelX < wallTextureSize; texturePixelX++)
+    //     {
+    //         size_t startPixelX = wallTextureSize * textureId;
 
-            frameBuffer[texturePixelX + texturePixelY * bufferWidth] = 
-                wallTextures[(startPixelX + texturePixelX) + texturePixelY * (wallTextureSize * wallTextureCount)];
-        }
-    }
+    //         frameBuffer[texturePixelX + texturePixelY * bufferWidth] = 
+    //             wallTextures[(startPixelX + texturePixelX) + texturePixelY * (wallTextureSize * wallTextureCount)];
+    //     }
+    // }
 
     drop_ppm_image("./out.ppm", frameBuffer, bufferWidth, bufferHeight);
     return 0;
