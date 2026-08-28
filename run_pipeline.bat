@@ -10,7 +10,7 @@ REM   4. Moves the resulting gif up into this folder
 REM
 REM  EDIT THE LINES BELOW to match your setup:
 REM ============================================================
-set "SRC_NAME=main.cpp"
+set "SRC_NAME=main.cpp framebuffer.cpp map.cpp utils.cpp texture.cpp"
 set "EXE_NAME=main.exe"
 set "PPM_SUBDIR=out"
 set "GIF_NAME=output.gif"
@@ -27,15 +27,17 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-if not exist "%SRC_NAME%" (
-    echo Error: "%SRC_NAME%" not found in %cd%
-    echo Edit SRC_NAME at the top of run_pipeline.bat to match your source file.
-    pause
-    exit /b 1
+for %%f in (%SRC_NAME%) do (
+    if not exist "%%f" (
+        echo Error: "%%f" not found in %cd%
+        echo Edit SRC_NAME at the top of run_pipeline.bat to match your source files.
+        pause
+        exit /b 1
+    )
 )
 
 echo Building %EXE_NAME% from %SRC_NAME% ...
-clang++ "%SRC_NAME%" -o "%EXE_NAME%"
+clang++ %SRC_NAME% -o "%EXE_NAME%"
 if %errorlevel% neq 0 (
     echo.
     echo Error: build failed. Fix the errors above and re-run.
