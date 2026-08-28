@@ -41,6 +41,7 @@ void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
+// TODO:depth buffer
 void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
 {
     // atan converts vector to angle (in radians). (in relation to +x axis)
@@ -89,11 +90,14 @@ void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, tex
         if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
             continue; // don't draw out of bounds
 
+        // TODO: if depth buffer
+
         for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
         {
             if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
                 continue; // don't draw out of bounds
 
+            // TODO: get texture colors, if a > 128, set pixel to texcolor
             buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, pack_color(0, 0, 0));
         }
     }
@@ -123,6 +127,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
     }
 
     // second screen
+    // TODO: declare depth buffer
     float startFovAngle = mainPlayer.viewDirectionAngle - mainPlayer.fov / 2.0f;
     for (size_t fovAngleStep = 0; fovAngleStep < buffer.width / 2; fovAngleStep++) // loop through each angle
     {
@@ -151,6 +156,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
             // if i am 3 grid away(48 pixels), cover 1/3 of the screen
             // ...
             float projectedDistance = rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle);
+            // TODO: store depth buffer
             float columnHeight = buffer.height / projectedDistance;
 
             int xCoord = wall_x_texcoord(rayMarchGridStepX, rayMarchGridStepY, wallTexture);
