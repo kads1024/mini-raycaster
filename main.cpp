@@ -13,6 +13,7 @@
 #include "framebuffer.h"
 #include "map.h"
 #include "player.h"
+#include "sprite.h"
 #include "stb_image.h"
 #include "texture.h"
 #include "utils.h"
@@ -33,7 +34,14 @@ int wall_x_texcoord(const float gridHitX, const float gridHitY, texture &wallTex
     return xCoord;
 }
 
-void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, texture &wallTexture)
+void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
+{
+    const size_t gridWidth = (buffer.width * 0.5f) / gameMap.width; // size of one map cell on the screen
+    const size_t gridHeight = buffer.height / gameMap.height;
+    buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
+}
+
+void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
 {
     buffer.clear(pack_color(255, 255, 255));
 
@@ -84,7 +92,8 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, texture &wall
             // if i am 2 grid away(32 pixels), cover half the screen
             // if i am 3 grid away(48 pixels), cover 1/3 of the screen
             // ...
-            float columnHeight = buffer.height / (rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle));
+            float projectedDistance = rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle);
+            float columnHeight = buffer.height / projectedDistance;
 
             int xCoord = wall_x_texcoord(rayMarchGridStepX, rayMarchGridStepY, wallTexture);
 
@@ -102,12 +111,17 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, texture &wall
                 if (rayMarchStepPixelY >= 0 && rayMarchStepPixelY < buffer.height)
                 {
                     buffer.set_pixel(rayMarchStepPixelX, rayMarchStepPixelY, column[columnY]);
-                }   
+                }
             }
 
             break;
         } // end raymarch
     } // end angle step
+
+    for (size_t spriteIndex = 0; spriteIndex < sprites.size(); spriteIndex++)
+    {
+        map_show_sprite(sprites[spriteIndex], buffer, gameMap);
+    }
 }
 
 int main()
@@ -122,10 +136,10 @@ int main()
     map gameMap;
 
     texture wallTextures("./walltext.png");
-
-    if (wallTextures.count <= 0)
+    texture monsterTextures("./monsters.png");
+    if (!wallTextures.count || !monsterTextures.count)
     {
-        std::cerr << "FAILED TO LOAD walltext.png\n";
+        std::cerr << "FAILED TO LOAD TEXTURES\n";
         return -1;
     }
 
@@ -133,20 +147,20 @@ int main()
     size_t gridHeight = buffer.height / gameMap.height;
 
     // animation loop
-    for (size_t frame = 0; frame < 360; frame++)
-    {
-        std::stringstream ss;
-        ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
-        mainPlayer.viewDirectionAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
-        buffer.clear(pack_color(255, 255, 255));
+    // for (size_t frame = 0; frame < 360; frame++)
+    // {
+    //     std::stringstream ss;
+    //     ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
+    //     mainPlayer.viewDirectionAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
+    //     buffer.clear(pack_color(255, 255, 255));
+    std::vector<sprite> sprites{{1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
+    render(buffer, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
 
-        render(buffer, gameMap, mainPlayer, wallTextures);
+    // std::cout << "\033[H\033[2J"; // clear console
+    // std::cout << "Generating animation progress: " << static_cast<int>((frame / 360.0f) * 100) << "%";
 
-        std::cout << "\033[H\033[2J"; // clear console
-        std::cout << "Generating animation progress: " << static_cast<int>((frame / 360.0f) * 100) << "%";
-
-        drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
-    }
-
+    drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
+    // } // end animation loop
+    std::cin.get();
     return 0;
 }
