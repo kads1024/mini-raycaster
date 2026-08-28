@@ -41,6 +41,63 @@ void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
+void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
+{
+    // atan converts vector to angle (in radians). (in relation to +x axis)
+    float spriteDir = atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
+
+    // atan2 only outputs (-π, π] but mainPlayer.viewDirectionAngle is linear (10deg and 370 deg) is the same
+    // we only need to clamp between (-π, π], else large sprite dir delta will result in sprite far away
+    while (spriteDir - mainPlayer.viewDirectionAngle > M_PI)
+        spriteDir -= 2 * M_PI;
+    while (spriteDir - mainPlayer.viewDirectionAngle < -M_PI)
+        spriteDir += 2 * M_PI;
+
+    // distance from the player to the sprite (pythagoras
+    float spriteDist = std::sqrt(pow(mainPlayer.x - inSprite.posX, 2) + pow(mainPlayer.y - inSprite.posY, 2));
+
+    // We now have our 2 main components to put sprite in screen, angle relative to player's forward and distance from player
+
+    // size is inversely proportional to distance
+    // if i am 1 grid away(16 pixels), cover the whole screen
+    // if i am 2 grid away(32 pixels), cover half the screen
+    // if i am 3 grid away(48 pixels), cover 1/3 of the screen
+    // ...
+    // no need to project for fish eye becuase we are only sampling from sprite pos and not per pixel
+    // clamp it at 2000 max size
+    size_t spriteScreenSize = std::min(2000, static_cast<int>(buffer.height / spriteDist));
+
+    // translate from angle to column (inverse of column to angle of the view angle loop)
+    float spriteAngleDeltaFromPlayer = spriteDir - mainPlayer.viewDirectionAngle; // get the current angle
+    int screenWidth = buffer.width / 2; // get the view port width
+    const float pixelsPerRadian = static_cast<float>(screenWidth) / mainPlayer.fov; // how many pixels per radian
+
+    // calculation above is mainPlayer.viewDirectionAngle = 0 means it starts at column 0 (buffer.width / 2) so we need 
+    // to offset it by half of the screen to position it at the center
+    float pixelOffsetToCenter = screenWidth / 2;
+
+    // position sprite on the center using pivot 0
+    const float centerColumn = spriteAngleDeltaFromPlayer * pixelsPerRadian + pixelOffsetToCenter;
+
+    int horizontalOffset = static_cast<int>(centerColumn - spriteTexture.pixelSize / 2); // center sprite by moving pivot to size*0.5f
+
+    int verticalOffset = static_cast<int>(buffer.height) / 2 - static_cast<int>(spriteScreenSize) / 2;
+
+    for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
+    {
+        if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
+            continue; // don't draw out of bounds
+
+        for (size_t pixelX = 0; pixelX < spriteScreenSize; pixelX++)
+        {
+            if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
+                continue; // don't draw out of bounds
+
+            buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, pack_color(0, 0, 0));
+        }
+    }
+}
+
 void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
 {
     buffer.clear(pack_color(255, 255, 255));
@@ -121,6 +178,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
     for (size_t spriteIndex = 0; spriteIndex < sprites.size(); spriteIndex++)
     {
         map_show_sprite(sprites[spriteIndex], buffer, gameMap);
+        draw_sprite(sprites[spriteIndex], buffer, mainPlayer, monsterTexture);
     }
 }
 
@@ -161,6 +219,5 @@ int main()
 
     drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
     // } // end animation loop
-    std::cin.get();
     return 0;
 }
