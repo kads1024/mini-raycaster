@@ -1,24 +1,31 @@
 #include "framebuffer.h"
+
 #include <cassert>
 
-void frameBuffer::clear(const uint32_t color)
+frameBuffer::frameBuffer(size_t width, size_t height, uint32_t color)
+    : width(width), height(height)
 {
-    data = std::vector<uint32_t>(width * height, color);
+    clear(color);
 }
 
-void frameBuffer::set_pixel(const size_t x, const size_t y, const uint32_t color)
+void frameBuffer::clear(uint32_t color)
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    data.assign(width * height, color);
+}
+
+void frameBuffer::set_pixel(size_t x, size_t y, uint32_t color)
+{
+    assert(x < width && y < height && data.size() == width * height);
     data[x + y * width] = color;
 }
 
-uint32_t frameBuffer::get_pixel(const size_t x, const size_t y)
+uint32_t frameBuffer::get_pixel(size_t x, size_t y) const
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    assert(x < width && y < height && data.size() == width * height);
     return data[x + y * width];
 }
 
-void frameBuffer::draw_rectangle(const size_t startX, const size_t startY, const size_t rectWidth, const size_t rectHeight, const uint32_t color)
+void frameBuffer::draw_rectangle(size_t startX, size_t startY, size_t rectWidth, size_t rectHeight, uint32_t color)
 {
     assert(data.size() == width * height);
     for (size_t rectPixelY = 0; rectPixelY < rectHeight; rectPixelY++)
@@ -34,19 +41,25 @@ void frameBuffer::draw_rectangle(const size_t startX, const size_t startY, const
     }
 }
 
-void depthBuffer::clear(const float depth)
+depthBuffer::depthBuffer(size_t width, size_t height)
+    : width(width), height(height)
 {
-    data = std::vector<float>(width * height, depth);
+    clear(0.0f);
 }
 
-void depthBuffer::set_pixel(const size_t x, const size_t y, const float depth)
+void depthBuffer::clear(float depth)
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    data.assign(width * height, depth);
+}
+
+void depthBuffer::set_pixel(size_t x, size_t y, float depth)
+{
+    assert(x < width && y < height && data.size() == width * height);
     data[x + y * width] = depth;
 }
 
-float depthBuffer::get_pixel(const size_t x, const size_t y)
+float depthBuffer::get_pixel(size_t x, size_t y) const
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    assert(x < width && y < height && data.size() == width * height);
     return data[x + y * width];
 }

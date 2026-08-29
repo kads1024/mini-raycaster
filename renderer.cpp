@@ -1,47 +1,57 @@
+#define _USE_MATH_DEFINES
+
 #include "renderer.h"
 
-#define _USE_MATH_DEFINES
-#define STB_IMAGE_IMPLEMENTATION
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
 
-#include "stb_image.h"
 #include "utils.h"
 
-int wall_x_texcoord(const float gridHitX, const float gridHitY, texture &wallTexture)
+namespace
+{
+/// Nothing has been drawn yet, so every depth pixel starts effectively infinitely far away.
+constexpr float depthClearDistance = 1e3f;
+
+/// Ray marching granularity and give-up distance, both in map grid units.
+constexpr float rayMarchStepIncrement = 0.01f;
+constexpr float rayMarchMaxDistance = 20.0f;
+
+/// Sprites stop growing past this many pixels on screen.
+constexpr int maxSpriteScreenSize = 2000;
+
+/// Sprite texels at or below this alpha are treated as fully transparent.
+constexpr uint8_t spriteAlphaCutoff = 128;
+} // namespace
+
+int wall_x_texcoord(float gridHitX, float gridHitY, const texture &wallTexture)
 {
     // local relative to a single texture
-    float currentLocalX = gridHitX - floor(gridHitX + 0.5f);
-    float currentLocalY = gridHitY - floor(gridHitY + 0.5f);
+    float currentLocalX = gridHitX - std::floor(gridHitX + 0.5f);
+    float currentLocalY = gridHitY - std::floor(gridHitY + 0.5f);
 
-    int xCoord = (abs(currentLocalX) > abs(currentLocalY) ? currentLocalX : currentLocalY) * wallTexture.pixelSize;
+    int xCoord = (std::abs(currentLocalX) > std::abs(currentLocalY) ? currentLocalX : currentLocalY) * wallTexture.pixelSize;
 
     if (xCoord < 0)
         xCoord += wallTexture.pixelSize;
 
-    assert(xCoord >= 0 && xCoord < wallTexture.pixelSize);
+    assert(xCoord >= 0 && xCoord < int(wallTexture.pixelSize));
 
     return xCoord;
 }
 
-void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
+void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, const map &gameMap)
 {
     const size_t gridWidth = (buffer.width * 0.5f) / gameMap.width; // size of one map cell on the screen
     const size_t gridHeight = buffer.height / gameMap.height;
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
-void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
+void draw_sprite(const sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, const player &mainPlayer, const texture &spriteTexture)
 {
     // atan converts vector to angle (in radians). (in relation to +x axis)
-    float spriteDir = atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
+    float spriteDir = std::atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
 
     // atan2 only outputs (-π, π] but mainPlayer.viewDirectionAngle is linear (10deg and 370 deg) is the same
     // we only need to clamp between (-π, π], else large sprite dir delta will result in sprite far away
@@ -51,7 +61,7 @@ void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, play
         spriteDir += 2 * M_PI;
 
     // distance from the player to the sprite (pythagoras
-    float spriteDist = std::sqrt(pow(mainPlayer.x - inSprite.posX, 2) + pow(mainPlayer.y - inSprite.posY, 2));
+    float spriteDist = std::sqrt(std::pow(mainPlayer.x - inSprite.posX, 2) + std::pow(mainPlayer.y - inSprite.posY, 2));
 
     // We now have our 2 main components to put sprite in screen, angle relative to player's forward and distance from player
 
@@ -62,7 +72,7 @@ void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, play
     // ...
     // no need to project for fish eye becuase we are only sampling from sprite pos and not per pixel
     // clamp it at 2000 max size
-    size_t spriteScreenSize = std::min(2000, static_cast<int>(buffer.height / spriteDist));
+    size_t spriteScreenSize = std::min(maxSpriteScreenSize, static_cast<int>(buffer.height / spriteDist));
 
     // translate from angle to column (inverse of column to angle of the view angle loop)
     float spriteAngleDeltaFromPlayer = spriteDir - mainPlayer.viewDirectionAngle;   // get the current angle
@@ -88,7 +98,7 @@ void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, play
 
         for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
         {
-            if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
+            if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= int(buffer.height))
                 continue; // don't draw out of bounds
 
             uint32_t color = spriteTexture.get(
@@ -97,7 +107,7 @@ void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, play
                 inSprite.textureID);
             uint8_t r, g, b, a;
             unpack_color(color, r, g, b, a);
-            if (a > 128)
+            if (a > spriteAlphaCutoff)
             {
                 if (depth.get_pixel(horizontalOffset + pixelX, verticalOffset + pixelY) < spriteDist)
                     continue; // dont draw column behind the current depth
@@ -108,10 +118,10 @@ void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, play
     }
 }
 
-void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
+void render(frameBuffer &buffer, depthBuffer &depth, const map &gameMap, const player &mainPlayer, const std::vector<sprite> &sprites, const texture &wallTexture, const texture &monsterTexture)
 {
     buffer.clear(pack_color(255, 255, 255));
-    depth.clear(1e3f); // nothing has been drawn yet, so everything is infinitely far away
+    depth.clear(depthClearDistance);
 
     size_t gridWidth = (buffer.width / gameMap.width) * 0.5f;
     size_t gridHeight = buffer.height / gameMap.height;
@@ -139,10 +149,10 @@ void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainP
         float currentFovAngle = startFovAngle + mainPlayer.fov * (static_cast<float>(fovAngleStep) / (buffer.width / 2)); // divide fov angle by how many pixels horizontally
 
         // rayMarchStepSize is also the distance to the player; values are in map grid coords
-        for (float rayMarchStepSize = 0.0f; rayMarchStepSize < 20.0f; rayMarchStepSize += 0.01f)
+        for (float rayMarchStepSize = 0.0f; rayMarchStepSize < rayMarchMaxDistance; rayMarchStepSize += rayMarchStepIncrement)
         {
-            float rayMarchGridStepX = mainPlayer.x + rayMarchStepSize * cos(currentFovAngle);
-            float rayMarchGridStepY = mainPlayer.y + rayMarchStepSize * sin(currentFovAngle);
+            float rayMarchGridStepX = mainPlayer.x + rayMarchStepSize * std::cos(currentFovAngle);
+            float rayMarchGridStepY = mainPlayer.y + rayMarchStepSize * std::sin(currentFovAngle);
 
             int rayMarchStepPixelX = rayMarchGridStepX * gridWidth;
             int rayMarchStepPixelY = rayMarchGridStepY * gridHeight;
@@ -160,7 +170,7 @@ void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainP
             // if i am 2 grid away(32 pixels), cover half the screen
             // if i am 3 grid away(48 pixels), cover 1/3 of the screen
             // ...
-            float projectedDistance = rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle);
+            float projectedDistance = rayMarchStepSize * std::cos(currentFovAngle - mainPlayer.viewDirectionAngle);
 
             float columnHeight = buffer.height / projectedDistance;
 
@@ -171,13 +181,13 @@ void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainP
             // draw second half of the screen
             rayMarchStepPixelX = (buffer.width / 2) + fovAngleStep;
 
+            size_t columnStartPixelY = buffer.height / 2 - columnHeight / 2;
+
             for (size_t columnY = 0; columnY < columnHeight; columnY++)
             {
-                size_t columnStartPixelY = buffer.height / 2 - columnHeight / 2;
-
                 rayMarchStepPixelY = columnY + columnStartPixelY;
 
-                if (rayMarchStepPixelY >= 0 && rayMarchStepPixelY < buffer.height)
+                if (rayMarchStepPixelY >= 0 && rayMarchStepPixelY < int(buffer.height))
                 {
                     depth.set_pixel(fovAngleStep, rayMarchStepPixelY, rayMarchStepSize);
                     buffer.set_pixel(rayMarchStepPixelX, rayMarchStepPixelY, column[columnY]);
@@ -188,43 +198,9 @@ void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainP
         } // end raymarch
     } // end angle step
 
-    for (size_t spriteIndex = 0; spriteIndex < sprites.size(); spriteIndex++)
+    for (const sprite &currentSprite : sprites)
     {
-        map_show_sprite(sprites[spriteIndex], buffer, gameMap);
-        draw_sprite(sprites[spriteIndex], depth, buffer, mainPlayer, monsterTexture);
+        map_show_sprite(currentSprite, buffer, gameMap);
+        draw_sprite(currentSprite, depth, buffer, mainPlayer, monsterTexture);
     }
 }
-
-// int main()
-// {
-//     frameBuffer buffer;
-//     buffer.width = 1024;
-//     buffer.height = 512;
-//     buffer.clear(pack_color(255, 255, 255));
-
-//     depthBuffer depth;
-//     depth.width = 512;
-//     depth.height = 512;
-
-//     player mainPlayer{3.456f, 2.345f, 1.523f, M_PI / 3.0};
-
-//     map gameMap;
-
-//     texture wallTextures("./walltext.png");
-//     texture monsterTextures("./monsters.png");
-//     if (!wallTextures.count || !monsterTextures.count)
-//     {
-//         std::cerr << "FAILED TO LOAD TEXTURES\n";
-//         return -1;
-//     }
-
-//     size_t gridWidth = (buffer.width / gameMap.width) * 0.5f;
-//     size_t gridHeight = buffer.height / gameMap.height;
-
-//     std::vector<sprite> sprites{{3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
-//     render(buffer, depth, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
-
-//     drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
-
-//     return 0;
-// }

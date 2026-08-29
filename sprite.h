@@ -1,12 +1,12 @@
 #pragma once
+#include <cstddef>
 
-#include <cstdint>
-
+/// @brief A billboard drawn at a position on the map grid.
 struct sprite
 {
-    /// @brief Grid Position X
+    /// @brief Grid position X
     float posX;
-    /// @brief Grid Position X
+    /// @brief Grid position Y
     float posY;
     size_t textureID;
 };

@@ -19,19 +19,19 @@ static const char mapData[] =
         "0              0"
         "0002222222200000";
 
-map::map() : width(16), height(16) 
+map::map() : width(16), height(16)
 {
     assert(sizeof(mapData) == width * height + 1); // null termination
-};
+}
 
-int map::get(const size_t x, const size_t y)
+int map::get(size_t x, size_t y) const
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height);
+    assert(x < width && y < height);
     return mapData[x + y * width] - '0';
 }
 
-bool map::is_cell_empty(const size_t x, const size_t y)
+bool map::is_cell_empty(size_t x, size_t y) const
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height);
+    assert(x < width && y < height);
     return mapData[x + y * width] == ' ';
 }

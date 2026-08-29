@@ -1,11 +1,14 @@
 #include "texture.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <cassert>
 #include <iostream>
 
-#include "stb_image.h"
 #include "utils.h"
 
-texture::texture(const std::string fileName) : width(0), height(0), count(0), pixelSize(0), data()
+texture::texture(const std::string &fileName) : width(0), height(0), count(0), pixelSize(0), data()
 {
     int numChannels = -1;
     int textureWidth;
@@ -39,9 +42,9 @@ texture::texture(const std::string fileName) : width(0), height(0), count(0), pi
     height = textureHeight;
     data = std::vector<uint32_t>(width * height);
 
-    for (size_t texturePixelY = 0; texturePixelY < textureHeight; texturePixelY++)
+    for (size_t texturePixelY = 0; texturePixelY < size_t(textureHeight); texturePixelY++)
     {
-        for (size_t texturePixelX = 0; texturePixelX < textureWidth; texturePixelX++)
+        for (size_t texturePixelX = 0; texturePixelX < size_t(textureWidth); texturePixelX++)
         {
             // 4 bytes per color
             uint8_t r = pixelMap[(texturePixelX + texturePixelY * textureWidth) * 4 + 0];
@@ -54,13 +57,13 @@ texture::texture(const std::string fileName) : width(0), height(0), count(0), pi
     stbi_image_free(pixelMap);
 }
 
-uint32_t& texture::get(const size_t x, const size_t y, const size_t textureIndex)
+uint32_t texture::get(size_t x, size_t y, size_t textureIndex) const
 {
     assert(x < pixelSize && y < pixelSize && textureIndex < count);
     return data[(textureIndex * pixelSize + x) + y * width];
 }
 
-std::vector<uint32_t> texture::get_scaled_column(const size_t textureId, const size_t xCoord, const size_t columnHeight)
+std::vector<uint32_t> texture::get_scaled_column(size_t textureId, size_t xCoord, size_t columnHeight) const
 {
     assert(xCoord < pixelSize && textureId < count);
     std::vector<uint32_t> column(columnHeight);
