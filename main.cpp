@@ -41,8 +41,7 @@ void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
-// TODO:depth buffer
-void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
+void draw_sprite(sprite & inSprite, std::vector<float>& depthBuffer, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
 {
     // atan converts vector to angle (in radians). (in relation to +x axis)
     float spriteDir = atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
@@ -80,7 +79,7 @@ void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, tex
     // position sprite on the center using pivot 0
     const float centerColumn = spriteAngleDeltaFromPlayer * pixelsPerRadian + pixelOffsetToCenter;
 
-    int horizontalOffset = static_cast<int>(centerColumn - spriteTexture.pixelSize / 2); // center sprite by moving pivot to size*0.5f
+    int horizontalOffset = static_cast<int>(centerColumn - spriteScreenSize / 2); // center sprite by moving pivot to size*0.5f
 
     int verticalOffset = static_cast<int>(buffer.height) / 2 - static_cast<int>(spriteScreenSize) / 2;
 
@@ -90,15 +89,22 @@ void draw_sprite(sprite & inSprite, frameBuffer &buffer, player &mainPlayer, tex
         if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
             continue; // don't draw out of bounds
 
-        // TODO: if depth buffer
+        if(depthBuffer[horizontalOffset + pixelX] < spriteDist)
+            continue; // dont draw column behind the current depth
 
         for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
         {
             if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
                 continue; // don't draw out of bounds
 
-            // TODO: get texture colors, if a > 128, set pixel to texcolor
-            buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, pack_color(0, 0, 0));
+            uint32_t color = spriteTexture.get(
+                spriteTexture.pixelSize * static_cast<float>(pixelX) / spriteScreenSize,
+                spriteTexture.pixelSize * static_cast<float>(pixelY) / spriteScreenSize,
+                inSprite.textureID);
+            uint8_t r, g, b, a;
+            unpack_color(color, r, g, b, a);
+            if(a > 128)
+                buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, color);
         }
     }
 }
@@ -127,7 +133,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
     }
 
     // second screen
-    // TODO: declare depth buffer
+    std::vector<float> depthBuffer(buffer.width / 2, 1000);
     float startFovAngle = mainPlayer.viewDirectionAngle - mainPlayer.fov / 2.0f;
     for (size_t fovAngleStep = 0; fovAngleStep < buffer.width / 2; fovAngleStep++) // loop through each angle
     {
@@ -156,7 +162,9 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
             // if i am 3 grid away(48 pixels), cover 1/3 of the screen
             // ...
             float projectedDistance = rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle);
-            // TODO: store depth buffer
+
+            depthBuffer[fovAngleStep] = rayMarchStepSize;
+
             float columnHeight = buffer.height / projectedDistance;
 
             int xCoord = wall_x_texcoord(rayMarchGridStepX, rayMarchGridStepY, wallTexture);
@@ -185,7 +193,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
     for (size_t spriteIndex = 0; spriteIndex < sprites.size(); spriteIndex++)
     {
         map_show_sprite(sprites[spriteIndex], buffer, gameMap);
-        draw_sprite(sprites[spriteIndex], buffer, mainPlayer, monsterTexture);
+        draw_sprite(sprites[spriteIndex], depthBuffer, buffer, mainPlayer, monsterTexture);
     }
 }
 
