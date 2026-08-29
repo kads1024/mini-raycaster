@@ -2,7 +2,7 @@
 
 A small CPU raycaster in C++ with SDL3. Renders a textured maze in first person with sprite monsters and a per-pixel depth buffer, alongside a top-down view of the same map.
 
-![render](render.png)
+![render](render.gif)
 
 ## About
 
