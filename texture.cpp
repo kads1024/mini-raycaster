@@ -56,22 +56,18 @@ texture::texture(const std::string fileName) : width(0), height(0), count(0), pi
 
 uint32_t& texture::get(const size_t x, const size_t y, const size_t textureIndex)
 {
-    assert(x >= 0 && y >= 0 && x < width && y < height && textureIndex < count);
-    return data[((pixelSize * count) + x) + y * width];
+    assert(x < pixelSize && y < pixelSize && textureIndex < count);
+    return data[(textureIndex * pixelSize + x) + y * width];
 }
 
 std::vector<uint32_t> texture::get_scaled_column(const size_t textureId, const size_t xCoord, const size_t columnHeight)
 {
     assert(xCoord < pixelSize && textureId < count);
-
     std::vector<uint32_t> column(columnHeight);
-
-    size_t pixelX = textureId * pixelSize + xCoord;
     for (size_t y = 0; y < columnHeight; y++)
     {
         size_t pixelY = pixelSize * (static_cast<float>(y) / columnHeight);
-        column[y] = get(pixelX, pixelY, textureId);
+        column[y] = get(xCoord, pixelY, textureId);
     }
-
     return column;
 }

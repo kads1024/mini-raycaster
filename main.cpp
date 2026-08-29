@@ -226,7 +226,7 @@ int main()
     //     ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
     //     mainPlayer.viewDirectionAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
     //     buffer.clear(pack_color(255, 255, 255));
-    std::vector<sprite> sprites{{1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
+    std::vector<sprite> sprites{{3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
     render(buffer, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
 
     // std::cout << "\033[H\033[2J"; // clear console
