@@ -33,3 +33,20 @@ void frameBuffer::draw_rectangle(const size_t startX, const size_t startY, const
         }
     }
 }
+
+void depthBuffer::clear(const float depth)
+{
+    data = std::vector<float>(width * height, depth);
+}
+
+void depthBuffer::set_pixel(const size_t x, const size_t y, const float depth)
+{
+    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    data[x + y * width] = depth;
+}
+
+float depthBuffer::get_pixel(const size_t x, const size_t y)
+{
+    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    return data[x + y * width];
+}

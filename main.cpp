@@ -41,7 +41,7 @@ void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
-void draw_sprite(sprite &inSprite, frameBuffer &depthBuffer, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
+void draw_sprite(sprite &inSprite, depthBuffer &depth, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
 {
     // atan converts vector to angle (in radians). (in relation to +x axis)
     float spriteDir = atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
@@ -102,18 +102,19 @@ void draw_sprite(sprite &inSprite, frameBuffer &depthBuffer, frameBuffer &buffer
             unpack_color(color, r, g, b, a);
             if(a > 128)
             {
-                if (depthBuffer.get_pixel(horizontalOffset + pixelX, verticalOffset + pixelY) < spriteDist)
+                if (depth.get_pixel(horizontalOffset + pixelX, verticalOffset + pixelY) < spriteDist)
                     continue; // dont draw column behind the current depth
-                depthBuffer.set_pixel(horizontalOffset + pixelX, verticalOffset + pixelY, spriteDist);
+                depth.set_pixel(horizontalOffset + pixelX, verticalOffset + pixelY, spriteDist);
                 buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, color);
             }     
         }
     }
 }
 
-void render(frameBuffer &buffer, frameBuffer &depthBuffer, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
+void render(frameBuffer &buffer, depthBuffer &depth, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
 {
     buffer.clear(pack_color(255, 255, 255));
+    depth.clear(1e3f); // nothing has been drawn yet, so everything is infinitely far away
 
     size_t gridWidth = (buffer.width / gameMap.width) * 0.5f;
     size_t gridHeight = buffer.height / gameMap.height;
@@ -181,7 +182,7 @@ void render(frameBuffer &buffer, frameBuffer &depthBuffer, map &gameMap, player 
 
                 if (rayMarchStepPixelY >= 0 && rayMarchStepPixelY < buffer.height)
                 {
-                    depthBuffer.set_pixel(fovAngleStep, rayMarchStepPixelY, rayMarchStepSize);
+                    depth.set_pixel(fovAngleStep, rayMarchStepPixelY, rayMarchStepSize);
                     buffer.set_pixel(rayMarchStepPixelX, rayMarchStepPixelY, column[columnY]);
                 }
             }
@@ -193,7 +194,7 @@ void render(frameBuffer &buffer, frameBuffer &depthBuffer, map &gameMap, player 
     for (size_t spriteIndex = 0; spriteIndex < sprites.size(); spriteIndex++)
     {
         map_show_sprite(sprites[spriteIndex], buffer, gameMap);
-        draw_sprite(sprites[spriteIndex], depthBuffer, buffer, mainPlayer, monsterTexture);
+        draw_sprite(sprites[spriteIndex], depth, buffer, mainPlayer, monsterTexture);
     }
 }
 
@@ -204,10 +205,9 @@ int main()
     buffer.height = 512;
     buffer.clear(pack_color(255, 255, 255));
 
-    frameBuffer depthBuffer;
-    depthBuffer.width = 512;
-    depthBuffer.height = 512;
-    depthBuffer.clear(1000);
+    depthBuffer depth;
+    depth.width = 512;
+    depth.height = 512;
 
     player mainPlayer{3.456f, 2.345f, 1.523f, M_PI / 3.0};
 
@@ -224,20 +224,10 @@ int main()
     size_t gridWidth = (buffer.width / gameMap.width) * 0.5f;
     size_t gridHeight = buffer.height / gameMap.height;
 
-    // animation loop
-    // for (size_t frame = 0; frame < 360; frame++)
-    // {
-    //     std::stringstream ss;
-    //     ss << "./out/" << std::setfill('0') << std::setw(5) << frame << ".ppm";
-    //     mainPlayer.viewDirectionAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
-    //     buffer.clear(pack_color(255, 255, 255));
     std::vector<sprite> sprites{{3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
-    render(buffer, depthBuffer, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
-
-    // std::cout << "\033[H\033[2J"; // clear console
-    // std::cout << "Generating animation progress: " << static_cast<int>((frame / 360.0f) * 100) << "%";
+    render(buffer, depth, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
 
     drop_ppm_image("./out.ppm", buffer.data, buffer.width, buffer.height);
-    // } // end animation loop
+
     return 0;
 }
