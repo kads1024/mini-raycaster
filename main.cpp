@@ -41,7 +41,7 @@ void map_show_sprite(const sprite &inSprite, frameBuffer &buffer, map &gameMap)
     buffer.draw_rectangle(inSprite.posX * gridWidth - 3, inSprite.posY * gridHeight - 3, 6, 6, pack_color(255, 0, 0)); // center it
 }
 
-void draw_sprite(sprite & inSprite, std::vector<float>& depthBuffer, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
+void draw_sprite(sprite &inSprite, frameBuffer &depthBuffer, frameBuffer &buffer, player &mainPlayer, texture &spriteTexture)
 {
     // atan converts vector to angle (in radians). (in relation to +x axis)
     float spriteDir = atan2(inSprite.posY - mainPlayer.y, inSprite.posX - mainPlayer.x);
@@ -89,14 +89,11 @@ void draw_sprite(sprite & inSprite, std::vector<float>& depthBuffer, frameBuffer
         if (horizontalOffset + int(pixelX) < 0 || horizontalOffset + int(pixelX) >= screenWidth)
             continue; // don't draw out of bounds
 
-        if(depthBuffer[horizontalOffset + pixelX] < spriteDist)
-            continue; // dont draw column behind the current depth
-
         for (size_t pixelY = 0; pixelY < spriteScreenSize; pixelY++)
         {
             if (verticalOffset + int(pixelY) < 0 || verticalOffset + int(pixelY) >= buffer.height)
                 continue; // don't draw out of bounds
-
+            
             uint32_t color = spriteTexture.get(
                 spriteTexture.pixelSize * static_cast<float>(pixelX) / spriteScreenSize,
                 spriteTexture.pixelSize * static_cast<float>(pixelY) / spriteScreenSize,
@@ -104,12 +101,17 @@ void draw_sprite(sprite & inSprite, std::vector<float>& depthBuffer, frameBuffer
             uint8_t r, g, b, a;
             unpack_color(color, r, g, b, a);
             if(a > 128)
+            {
+                if (depthBuffer.get_pixel(horizontalOffset + pixelX, verticalOffset + pixelY) < spriteDist)
+                    continue; // dont draw column behind the current depth
+                depthBuffer.set_pixel(horizontalOffset + pixelX, verticalOffset + pixelY, spriteDist);
                 buffer.set_pixel(screenWidth + horizontalOffset + pixelX, verticalOffset + pixelY, color);
+            }     
         }
     }
 }
 
-void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
+void render(frameBuffer &buffer, frameBuffer &depthBuffer, map &gameMap, player &mainPlayer, std::vector<sprite> &sprites, texture &wallTexture, texture &monsterTexture)
 {
     buffer.clear(pack_color(255, 255, 255));
 
@@ -133,7 +135,6 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
     }
 
     // second screen
-    std::vector<float> depthBuffer(buffer.width / 2, 1000);
     float startFovAngle = mainPlayer.viewDirectionAngle - mainPlayer.fov / 2.0f;
     for (size_t fovAngleStep = 0; fovAngleStep < buffer.width / 2; fovAngleStep++) // loop through each angle
     {
@@ -163,8 +164,6 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
             // ...
             float projectedDistance = rayMarchStepSize * cos(currentFovAngle - mainPlayer.viewDirectionAngle);
 
-            depthBuffer[fovAngleStep] = rayMarchStepSize;
-
             float columnHeight = buffer.height / projectedDistance;
 
             int xCoord = wall_x_texcoord(rayMarchGridStepX, rayMarchGridStepY, wallTexture);
@@ -182,6 +181,7 @@ void render(frameBuffer &buffer, map &gameMap, player &mainPlayer, std::vector<s
 
                 if (rayMarchStepPixelY >= 0 && rayMarchStepPixelY < buffer.height)
                 {
+                    depthBuffer.set_pixel(fovAngleStep, rayMarchStepPixelY, rayMarchStepSize);
                     buffer.set_pixel(rayMarchStepPixelX, rayMarchStepPixelY, column[columnY]);
                 }
             }
@@ -203,6 +203,11 @@ int main()
     buffer.width = 1024;
     buffer.height = 512;
     buffer.clear(pack_color(255, 255, 255));
+
+    frameBuffer depthBuffer;
+    depthBuffer.width = 512;
+    depthBuffer.height = 512;
+    depthBuffer.clear(1000);
 
     player mainPlayer{3.456f, 2.345f, 1.523f, M_PI / 3.0};
 
@@ -227,7 +232,7 @@ int main()
     //     mainPlayer.viewDirectionAngle += 2.0f * M_PI / 360.0f; // iterate by 1deg in rad
     //     buffer.clear(pack_color(255, 255, 255));
     std::vector<sprite> sprites{{3.523, 3.812, 2}, {1.834, 8.765, 0}, {5.323, 5.365, 1}, {4.123, 10.265, 1}}; // gridPositions
-    render(buffer, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
+    render(buffer, depthBuffer, gameMap, mainPlayer, sprites, wallTextures, monsterTextures);
 
     // std::cout << "\033[H\033[2J"; // clear console
     // std::cout << "Generating animation progress: " << static_cast<int>((frame / 360.0f) * 100) << "%";

@@ -12,6 +12,12 @@ void frameBuffer::set_pixel(const size_t x, const size_t y, const uint32_t color
     data[x + y * width] = color;
 }
 
+uint32_t frameBuffer::get_pixel(const size_t x, const size_t y)
+{
+    assert(x >= 0 && y >= 0 && x < width && y < height && data.size() == width * height);
+    return data[x + y * width];
+}
+
 void frameBuffer::draw_rectangle(const size_t startX, const size_t startY, const size_t rectWidth, const size_t rectHeight, const uint32_t color)
 {
     assert(data.size() == width * height);
